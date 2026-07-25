@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>William Clinic - AI Patient System</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .card { border-radius: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; transition: 0.3s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 20px 30px -10px rgba(0,0,0,0.1); }
+        .status-active { background: #dcfce7; color: #166534; }
+        .btn-primary { background: #0f766e; color: white; transition: 0.3s; }
+        .btn-primary:hover { background: #134e4a; transform: scale(1.02); }
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- SETUP MODAL (Security First) -->
+    <div id="setupModal" class="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] hidden p-4">
+        <div class="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl">
+            <h2 class="text-2xl font-bold text-teal-800 mb-2">⚙️ Mipangilio ya Usalama</h2>
+            <p class="text-sm text-slate-500 mb-6">Keys hizi hazitahifadhiwa kwenye GitHub. Zitahifadhiwa tu kwenye kivinjari chako.</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-400">Supabase URL</label>
+                    <input type="text" id="set_supaUrl" class="w-full border p-3 rounded-xl mt-1 outline-teal-500" placeholder="https://xyz.supabase.co">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-400">Supabase Anon Key</label>
+                    <input type="password" id="set_supaKey" class="w-full border p-3 rounded-xl mt-1 outline-teal-500">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-400">Mistral AI API Key</label>
+                    <input type="password" id="set_mistralKey" class="w-full border p-3 rounded-xl mt-1 outline-teal-500">
+                </div>
+                <button onclick="saveSetup()" class="w-full btn-primary p-4 rounded-2xl font-bold">💾 Hifadhi na Anza</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        <!-- HEADER -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-teal-900 p-6 rounded-[30px] text-white shadow-xl">
+            <div class="flex items-center gap-4">
+                <div class="bg-white/20 p-3 rounded-2xl text-3xl">🏥</div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight">WILLIAM CLINIC</h1>
+                    <p class="text-teal-200 text-sm">AI Patient Management System</p>
+                </div>
+            </div>
+            <div class="flex gap-3 items-center">
+                <button onclick="toggleSetup()" class="bg-white/10 p-3 rounded-xl hover:bg-white/20">⚙️</button>
+                <div class="bg-black/20 px-4 py-2 rounded-xl text-xs font-mono" id="clockDisplay">...</div>
+            </div>
+        </header>
+
+        <!-- NOTIFICATION BAR -->
+        <div id="notifBar" class="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-8 flex items-center justify-between no-print">
+            <div class="flex items-center gap-3">
+                <span class="text-xl">🔔</span>
+                <span id="notifMessage" class="text-sm font-medium text-amber-800">Inatafuta hali ya wagonjwa...</span>
+            </div>
+            <button onclick="speakText(document.getElementById('notifMessage').textContent)" class="text-amber-600 font-bold text-xs hover:underline">🔊 SOMA</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- LEFT COLUMN: Forms -->
+            <div class="lg:col-span-5 space-y-8">
+                <!-- FORM: NEW PATIENT -->
+                <div class="card bg-white p-6">
+                    <h3 class="text-lg font-bold flex items-center gap-2 text-teal-900 border-b pb-4 mb-4">
+                        <span>📝</span> Mgonjwa Mpya & Shida
+                    </h3>
+                    <form id="patientForm" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 mb-1 block">JINA KAMILI</label>
+                                <input type="text" id="patientName" class="w-full border p-3 rounded-xl focus:ring-2 ring-teal-500 outline-none bg-slate-50" required>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 mb-1 block">UMRI & JINSIA</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="patientAge" class="w-20 border p-3 rounded-xl bg-slate-50" placeholder="Umri">
+                                    <select id="patientGender" class="flex-1 border p-3 rounded-xl bg-slate-50">
+                                        <option value="Me">Me</option>
+                                        <option value="Ke">Ke</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 mb-1 block">SHIDA / DALILI</label>
+                            <textarea id="patientComplaint" class="w-full border p-3 rounded-xl h-24 bg-slate-50 outline-none focus:ring-2 ring-teal-500" required placeholder="Andika dalili zote..."></textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 mb-1 block">MAELEZO YA ZIADA (Hiari)</label>
+                            <textarea id="patientExtra" class="w-full border p-3 rounded-xl h-20 bg-slate-50 outline-none focus:ring-2 ring-teal-500" placeholder="Mzio, Kisukari, Presha nk..."></textarea>
+                        </div>
+                        <button type="submit" id="generateBtn" class="w-full btn-primary p-4 rounded-2xl font-bold flex items-center justify-center gap-2">
+                            <span>🤖</span> TENGENEZA MWONGOZO
+                        </button>
+                    </form>
+                </div>
+
+                <!-- FORM: TRACKING -->
+                <div class="card bg-white p-6">
+                    <h3 class="text-lg font-bold text-teal-900 mb-4 flex items-center gap-2"><span>📊</span> Ufuatiliaji Leo</h3>
+                    <form id="trackingForm" class="space-y-4">
+                        <select id="trackPatientSelect" class="w-full border p-3 rounded-xl bg-slate-50"></select>
+                        <div class="flex justify-between bg-teal-50 p-4 rounded-xl">
+                            <label class="flex items-center gap-2 text-xs font-bold"><input type="checkbox" id="trackA"> DAWA A</label>
+                            <label class="flex items-center gap-2 text-xs font-bold"><input type="checkbox" id="trackB"> DAWA B</label>
+                            <label class="flex items-center gap-2 text-xs font-bold"><input type="checkbox" id="trackC"> DAWA C</label>
+                            <label class="flex items-center gap-2 text-xs font-bold"><input type="checkbox" id="trackD"> DAWA D</label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500">MAUMIVU (1-10)</label>
+                                <input type="number" id="trackPain" class="w-full border p-2 rounded-lg" min="1" max="10" value="1">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500">MAKOJO (MARA NGAPI)</label>
+                                <input type="number" id="trackUrine" class="w-full border p-2 rounded-lg" value="5">
+                            </div>
+                        </div>
+                        <input type="text" id="trackNote" placeholder="Maelezo mafupi ya maendeleo..." class="w-full border p-3 rounded-xl bg-slate-50">
+                        <button type="submit" class="w-full bg-slate-800 text-white p-3 rounded-xl font-bold hover:bg-slate-900 transition">💾 HIFADHI RIPOTI</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Output & Lists -->
+            <div class="lg:col-span-7 space-y-8">
+                <!-- GENERATED GUIDE OUTPUT -->
+                <div class="card bg-teal-900 text-white p-6" id="guideSection">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold">📄 Mwongozo wa Matibabu</h3>
+                        <div class="flex gap-2 no-print">
+                            <button onclick="printGuide()" class="bg-white/10 p-2 rounded-lg hover:bg-white/20">🖨️</button>
+                            <button onclick="speakText(document.getElementById('guideOutput').textContent)" class="bg-white/10 p-2 rounded-lg hover:bg-white/20">🔊</button>
+                        </div>
+                    </div>
+                    <div id="guideOutput" class="bg-white/10 p-6 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap min-h-[200px] border border-white/10">
+                        Mwongozo utaonekana hapa ukishajaza taarifa za mgonjwa...
+                    </div>
+                </div>
+
+                <!-- PATIENTS LIST -->
+                <div class="card bg-white p-6 overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-teal-900">👥 Orodha ya Wagonjwa</h3>
+                        <button onclick="loadPatients()" class="text-xs text-teal-600 hover:underline">⟳ Pakia upya</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-slate-400 border-b">
+                                    <th class="py-3 px-2">MGONJWA</th>
+                                    <th class="py-3 px-2">DALILI</th>
+                                    <th class="py-3 px-2">HALI</th>
+                                    <th class="py-3 px-2">KITENDO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patientTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let CONFIG = { supaUrl: '', supaKey: '', mistralKey: '' };
+        let supabaseClient = null;
+        let currentPatients = [];
+
+        // 1. SETUP LOGIC
+        function toggleSetup() {
+            document.getElementById('setupModal').classList.toggle('hidden');
+        }
+
+        function saveSetup() {
+            const data = {
+                supaUrl: document.getElementById('set_supaUrl').value,
+                supaKey: document.getElementById('set_supaKey').value,
+                mistralKey: document.getElementById('set_mistralKey').value
+            };
+            localStorage.setItem('william_clinic_v2', JSON.stringify(data));
+            location.reload();
+        }
+
+        function initApp() {
+            const saved = localStorage.getItem('william_clinic_v2');
+            if (!saved) {
+                toggleSetup();
+                return;
+            }
+            CONFIG = JSON.parse(saved);
+            supabaseClient = supabase.createClient(CONFIG.supaUrl, CONFIG.supaKey);
+            
+            loadPatients();
+            updateClock();
+            setInterval(updateClock, 1000);
+            setInterval(checkNotifications, 300000);
+        }
+
+        // 2. DATA LOGIC
+        async function loadPatients() {
+            try {
+                const { data, error } = await supabaseClient.from('patients').select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                currentPatients = data;
+                renderPatients();
+                populateSelect();
+                checkNotifications();
+            } catch (e) { logError("Kupakia wagonjwa", e); }
+        }
+
+        function renderPatients() {
+            const body = document.getElementById('patientTableBody');
+            body.innerHTML = currentPatients.map(p => `
+                <tr class="border-b hover:bg-slate-50 transition">
+                    <td class="py-4 px-2">
+                        <div class="font-bold text-slate-700">${p.name}</div>
+                        <div class="text-[10px] text-slate-400">${p.age}yrs | ${p.gender}</div>
+                    </td>
+                    <td class="py-4 px-2 text-slate-500 max-w-[150px] truncate">${p.complaint}</td>
+                    <td class="py-4 px-2">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold status-active">ACTIVE</span>
+                    </td>
+                    <td class="py-4 px-2">
+                        <button onclick="deletePatient('${p.id}')" class="text-red-400 hover:text-red-600">🗑️</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" class="text-center py-8 text-slate-400">Hakuna wagonjwa.</td></tr>';
+        }
+
+        function populateSelect() {
+            const select = document.getElementById('trackPatientSelect');
+            select.innerHTML = '<option value="">-- Chagua Mgonjwa --</option>' + 
+                currentPatients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        }
+
+        // 3. AI LOGIC (MISTRAL)
+        async function generateGuide(e) {
+            e.preventDefault();
+            const btn = document.getElementById('generateBtn');
+            const name = document.getElementById('patientName').value;
+            const complaint = document.getElementById('patientComplaint').value;
+
+            btn.disabled = true;
+            btn.textContent = "⏳ Inatengeneza...";
+
+            const prompt = `Wewe ni daktari bingwa wa William Clinic. Mgonjwa anaitwa ${name}, umri ${document.getElementById('patientAge').value}. 
+            Anasumbuliwa na: ${complaint}. 
+            Maelezo ya ziada: ${document.getElementById('patientExtra').value}. 
+            
+            Tengeneza MWONGOZO WA MATIBABU WA WIKI MOJA.
+            Gawanya katika DAWA A, DAWA B, DAWA C, na DAWA D.
+            Andika kwa Kiswahili fasaha, mpangilio mzuri, na USITUMIE alama za ** (bold).`;
+
+            try {
+                const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${CONFIG.mistralKey}` },
+                    body: JSON.stringify({
+                        model: "mistral-medium",
+                        messages: [{ role: "user", content: prompt }]
+                    })
+                });
+                const data = await res.json();
+                const guide = data.choices[0].message.content;
+                
+                document.getElementById('guideOutput').textContent = guide;
+
+                // Save to Supabase
+                const { error } = await supabaseClient.from('patients').insert({
+                    name, age: document.getElementById('patientAge').value,
+                    gender: document.getElementById('patientGender').value,
+                    complaint, guide,
+                    extra: document.getElementById('patientExtra').value
+                });
+
+                if (error) throw error;
+                loadPatients();
+                speakText(`Mwongozo wa mgonjwa ${name} umekamilika.`);
+            } catch (e) { logError("AI Guide", e); }
+            finally {
+                btn.disabled = false;
+                btn.textContent = "🤖 TENGENEZA MWONGOZO";
+            }
+        }
+
+        // 4. UTILS
+        function updateClock() {
+            document.getElementById('clockDisplay').textContent = new Date().toLocaleString('sw-TZ');
+        }
+
+        function speakText(text) {
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'sw-TZ';
+            speechSynthesis.speak(u);
+        }
+
+        async function deletePatient(id) {
+            if(!confirm("Futa mgonjwa huyu?")) return;
+            await supabaseClient.from('patients').delete().eq('id', id);
+            loadPatients();
+        }
+
+        function printGuide() { window.print(); }
+
+        function logError(task, err) {
+            console.error(`Kosa la ${task}:`, err);
+            alert(`Tatizo la ${task}. Hakikisha Keys ni sahihi.`);
+        }
+
+        async function checkNotifications() {
+            const bar = document.getElementById('notifMessage');
+            if(currentPatients.length === 0) {
+                bar.textContent = "Hakuna wagonjwa walioandikishwa.";
+                return;
+            }
+            bar.textContent = `Tayari kuhudumia wagonjwa ${currentPatients.length}. Hakiki ripoti za ufuatiliaji.`;
+        }
+
+        // Event Listeners
+        document.getElementById('patientForm').onsubmit = generateGuide;
+        document.getElementById('trackingForm').onsubmit = async (e) => {
+            e.preventDefault();
+            alert("Ripoti imehifadhiwa! (Simulated)");
+            e.target.reset();
+        };
+
+        initApp();
+    </script>
+</body>
+</html>
